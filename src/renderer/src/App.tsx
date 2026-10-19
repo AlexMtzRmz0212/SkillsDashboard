@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ActionResult, InstallsState, ScanResult } from '@shared/types'
-import { Sidebar, type Flags, type SourceFilter } from './components/Sidebar'
+import { Discover } from './components/Discover'
+import { Sidebar, type Flags, type SourceFilter, type View } from './components/Sidebar'
 import { UNGROUPED } from './components/GroupNav'
 import { SkillList, type SortKey } from './components/SkillList'
 import { installsOf } from './components/Installs'
@@ -8,6 +9,7 @@ import { SkillDetail } from './components/SkillDetail'
 import { Toasts, type ToastItem } from './components/Toast'
 import { matches } from './lib'
 import { useGroups } from './useGroups'
+import { useInstaller } from './useInstaller'
 
 const PACK_HINT = 'Upload it at claude.ai → Settings → Capabilities → Skills → Upload skill, then toggle it on.'
 
@@ -16,6 +18,8 @@ export default function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [version, setVersion] = useState(0)
+  const [view, setView] = useState<View>('library')
+  const [discoverPath, setDiscoverPath] = useState<string[]>([])
   const [source, setSource] = useState<SourceFilter>('all')
   const [flags, setFlags] = useState<Flags>({ notLinked: false, warnings: false, sameName: false })
   const [query, setQuery] = useState('')
@@ -98,12 +102,41 @@ export default function App(): React.JSX.Element {
     }
   }, [onResult])
 
+  const installer = useInstaller(
+    useCallback(
+      (hit, ok) => {
+        onResult({
+          ok,
+          message: ok ? `Installed ${hit.name} into ~/.agents/skills` : `Couldn't install ${hit.name}`
+        })
+        if (ok) load()
+      },
+      [load, onResult]
+    )
+  )
+
   const selected = data?.skills.find((s) => s.id === selectedId) ?? null
 
   return (
     <div className="app">
       <Sidebar
         skills={data?.skills ?? []}
+        view={view}
+        onView={setView}
+        installing={installer.active !== null}
+        onOpenInstalled={(s) => {
+          if (s.registry) {
+            setDiscoverPath([...s.registry.source.split('/'), s.registry.skillId])
+          } else {
+            // No skills.sh page for it (made locally): show it in My skills instead.
+            setView('library')
+            setSource('all')
+            setQuery('')
+            setGroup(null)
+            setFlags({ notLinked: false, warnings: false, sameName: false })
+            select(s.id)
+          }
+        }}
         source={source}
         flags={flags}
         loading={loading}
@@ -117,38 +150,50 @@ export default function App(): React.JSX.Element {
         fetchingInstalls={fetching}
         onRefreshInstalls={refreshInstalls}
       />
-      <SkillList
-        skills={visible}
-        selectedId={selectedId}
-        query={query}
-        showSource={source === 'all'}
-        installs={installs}
-        sort={sort}
-        onSort={setSort}
-        onQuery={setQuery}
-        onSelect={select}
-      />
-      {error ? (
-        <section className="detail empty-detail">
-          <p>Couldn't scan skills: {error}</p>
-        </section>
-      ) : selected && data ? (
-        <SkillDetail
-          key={selected.id}
-          skill={selected}
-          tools={data.tools}
-          groups={groups}
-          all={data.skills}
-          installs={installs}
-          onSelect={select}
-          version={version}
-          onDirty={onDirty}
+      {view === 'discover' ? (
+        <Discover
+          skills={data?.skills ?? []}
+          installer={installer}
           onResult={onResult}
+          path={discoverPath}
+          onPath={setDiscoverPath}
         />
       ) : (
-        <section className="detail empty-detail">
-          <p>{data ? 'Select a skill.' : 'Scanning…'}</p>
-        </section>
+        <>
+          <SkillList
+            skills={visible}
+            selectedId={selectedId}
+            query={query}
+            showSource={source === 'all'}
+            installs={installs}
+            sort={sort}
+            onSort={setSort}
+            onQuery={setQuery}
+            onSelect={select}
+          />
+          {error ? (
+            <section className="detail empty-detail">
+              <p>Couldn't scan skills: {error}</p>
+            </section>
+          ) : selected && data ? (
+            <SkillDetail
+              key={selected.id}
+              skill={selected}
+              tools={data.tools}
+              groups={groups}
+              all={data.skills}
+              installs={installs}
+              onSelect={select}
+              version={version}
+              onDirty={onDirty}
+              onResult={onResult}
+            />
+          ) : (
+            <section className="detail empty-detail">
+              <p>{data ? 'Select a skill.' : 'Scanning…'}</p>
+            </section>
+          )}
+        </>
       )}
       <Toasts items={toasts} onClose={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
     </div>

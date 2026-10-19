@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ActionResult, InstallsState, Skill, ToolAvailability } from '@shared/types'
 import { ACCOUNT_ORIGIN, SOURCE_LABEL, relativeTime, splitFrontmatter } from '../lib'
 import type { GroupsApi } from '../useGroups'
+import { DeleteSkillDialog } from './DeleteSkillDialog'
 import { Editor } from './Editor'
 import { GroupPicker } from './GroupPicker'
 import { FileTree } from './FileTree'
@@ -36,6 +37,7 @@ export function SkillDetail({ skill, tools, groups, all, installs, onSelect, ver
   const [tab, setTab] = useState<Tab>('preview')
   const [text, setText] = useState<string | null>(null)
   const [busy, setBusy] = useState<'link' | 'pack' | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -64,6 +66,7 @@ export function SkillDetail({ skill, tools, groups, all, installs, onSelect, ver
   }
 
   const fm = text ? splitFrontmatter(text) : null
+  const canDelete = skill.editable && (skill.source === 'claude' || skill.source === 'agents')
   const canPack = tools.pack && (skill.source === 'claude' || skill.source === 'agents')
   const canLink = tools.link && skill.source === 'agents' && skill.linkState === 'not-linked'
   const origin =
@@ -121,6 +124,11 @@ export function SkillDetail({ skill, tools, groups, all, installs, onSelect, ver
           <button className="btn" onClick={() => window.api.openSkillMd(skill.id)}>
             <Icon name="external" /> Open SKILL.md
           </button>
+          {canDelete && (
+            <button className="btn danger-outline actions-end" disabled={!!busy} onClick={() => setConfirming(true)}>
+              <Icon name="trash" /> Delete
+            </button>
+          )}
         </div>
 
         {skill.warnings.length > 0 && (
@@ -181,6 +189,17 @@ export function SkillDetail({ skill, tools, groups, all, installs, onSelect, ver
           <Editor skill={skill} version={version} onDirty={onDirty} onResult={onResult} />
         )}
       </div>
+
+      {confirming && (
+        <DeleteSkillDialog
+          skill={skill}
+          onResult={onResult}
+          onClose={(deleted) => {
+            if (deleted) onDirty(false)
+            setConfirming(false)
+          }}
+        />
+      )}
     </section>
   )
 }

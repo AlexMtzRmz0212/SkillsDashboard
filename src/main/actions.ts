@@ -4,6 +4,7 @@ import { basename, join, resolve, sep } from 'path'
 import { shell } from 'electron'
 import type { ActionResult } from '@shared/types'
 import { LINK_SCRIPT, PACK_SCRIPT, ROOTS } from './paths'
+import { removeSkill } from './remove'
 import { getSkill } from './scanner'
 
 function runPowerShell(script: string, args: string[]): Promise<{ code: number; output: string }> {
@@ -61,6 +62,19 @@ export async function link(id: string): Promise<ActionResult> {
     ok: code === 0,
     message: code === 0 ? `Linked ${folder} into ~/.claude/skills` : 'Link failed',
     output
+  }
+}
+
+export async function deleteSkill(id: string): Promise<ActionResult> {
+  const skill = getSkill(id)
+  try {
+    const { linkRemoved } = await removeSkill(skill, (p) => shell.trashItem(p))
+    return {
+      ok: true,
+      message: `Moved ${skill.name} to the Recycle Bin${linkRemoved ? ' and removed its link in ~/.claude/skills' : ''}`
+    }
+  } catch (e) {
+    return { ok: false, message: `Couldn't delete ${skill.name}: ${(e as Error).message}` }
   }
 }
 

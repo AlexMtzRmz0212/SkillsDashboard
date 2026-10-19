@@ -76,6 +76,69 @@ export interface GroupsState {
   members: Record<string, string[]>
 }
 
+/** One result from skills.sh search. */
+export interface RegistryHit {
+  /** `owner/repo/skillId` */
+  id: string
+  /** GitHub owner/repo. */
+  source: string
+  skillId: string
+  name: string
+  installs: number
+}
+
+export interface SearchResult {
+  skills: RegistryHit[]
+  error?: string
+}
+
+/** Pass as the skill to install every skill in a repo. */
+export const ALL_SKILLS = '*'
+
+/**
+ * The install command. `universal` is the agent whose folder is ~/.agents/skills; adding
+ * `claude-code` also symlinks the skill into ~/.claude/skills.
+ */
+export const installCommand = (source: string, skillId: string, withClaude: boolean): string =>
+  `npx --yes skills add ${source} -s ${skillId === ALL_SKILLS ? '"*"' : skillId} -g -a universal${withClaude ? ' claude-code' : ''} -y`
+
+export type Board = 'all-time' | 'trending' | 'hot'
+
+export interface RepoRow {
+  name: string
+  /** For example "21 skills: frontend-design, skill-creator +19 more". */
+  summary: string
+  installs: number
+}
+
+export interface SkillRow {
+  skillId: string
+  installs: number
+}
+
+/** What skills.sh shows at each level of owner / repo / skill. */
+export type BrowseData =
+  | { level: 'board'; skills: RegistryHit[]; hasMore: boolean }
+  | { level: 'owner'; repos: RepoRow[] }
+  | { level: 'repo'; skills: SkillRow[] }
+  | { level: 'skill'; topic?: string; summary: { bullet: boolean; text: string }[] }
+
+export interface BrowseResult {
+  data?: BrowseData
+  error?: string
+}
+
+export interface InstallStart {
+  ok: boolean
+  /** Id of the running install; events for it carry the same id. */
+  id?: string
+  message?: string
+}
+
+export type InstallEvent =
+  | { type: 'data'; id: string; data: string }
+  | { type: 'exit'; id: string; code: number | null }
+
 export interface SkillsApi {
   scan(): Promise<ScanResult>
   getGroups(): Promise<GroupsState>
@@ -85,10 +148,16 @@ export interface SkillsApi {
   readFile(skillId: string, relPath: string): Promise<string>
   saveFile(skillId: string, relPath: string, content: string): Promise<ActionResult>
   link(skillId: string): Promise<ActionResult>
+  deleteSkill(skillId: string): Promise<ActionResult>
   pack(skillId: string): Promise<ActionResult>
   openFolder(skillId: string): Promise<void>
   openSkillMd(skillId: string): Promise<void>
   showInExplorer(skillId: string): Promise<void>
   openExternal(url: string): Promise<void>
+  searchRegistry(query: string): Promise<SearchResult>
+  browseRegistry(path: string[], board: Board, page: number): Promise<BrowseResult>
+  installSkill(source: string, skillId: string, withClaude: boolean): Promise<InstallStart>
+  cancelInstall(): Promise<void>
+  onInstallEvent(cb: (e: InstallEvent) => void): () => void
   onChanged(cb: () => void): () => void
 }

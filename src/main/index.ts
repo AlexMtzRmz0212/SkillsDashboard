@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'path'
-import type { GroupsState } from '@shared/types'
+import type { Board, GroupsState } from '@shared/types'
 import * as actions from './actions'
+import { browseRegistry } from './browse'
+import { cancelInstall, installSkill, searchRegistry } from './discover'
 import { getGroups, saveGroups } from './groups'
 import { getInstalls, refreshInstalls } from './installs'
 import { scan } from './scanner'
@@ -55,15 +57,27 @@ app.whenReady().then(() => {
     actions.saveFile(id, rel, content)
   )
   ipcMain.handle('skills:link', (_e, id: string) => actions.link(id))
+  ipcMain.handle('skills:delete', (_e, id: string) => actions.deleteSkill(id))
   ipcMain.handle('skills:pack', (_e, id: string) => actions.pack(id))
   ipcMain.handle('skills:openFolder', (_e, id: string) => actions.openFolder(id))
   ipcMain.handle('skills:openSkillMd', (_e, id: string) => actions.openSkillMd(id))
   ipcMain.handle('skills:showInExplorer', (_e, id: string) => actions.showInExplorer(id))
   ipcMain.handle('app:openExternal', (_e, url: string) => actions.openExternal(url))
+  ipcMain.handle('registry:search', (_e, q: string) => searchRegistry(q))
+  ipcMain.handle('registry:browse', (_e, path: string[], board: Board, page: number) =>
+    browseRegistry(path, board, page)
+  )
+  ipcMain.handle('install:start', (_e, source: string, skillId: string, withClaude: boolean) =>
+    installSkill(source, skillId, !!withClaude, (ev) => win?.webContents.send('install:event', ev))
+  )
+  ipcMain.handle('install:cancel', () => cancelInstall())
 
   createWindow()
   const watcher = watchRoots(() => win?.webContents.send('skills:changed'))
-  app.on('before-quit', () => watcher.close())
+  app.on('before-quit', () => {
+    watcher.close()
+    cancelInstall()
+  })
 })
 
 app.on('window-all-closed', () => app.quit())
