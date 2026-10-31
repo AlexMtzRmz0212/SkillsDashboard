@@ -34,9 +34,19 @@ export async function getGroups(): Promise<GroupsState> {
   }
 }
 
-export async function saveGroups(state: GroupsState): Promise<void> {
-  // Write then rename so a crash mid-save can't leave a half-written file.
-  const tmp = file() + '.tmp'
-  await fs.writeFile(tmp, JSON.stringify(clean(state), null, 2), 'utf8')
-  await fs.rename(tmp, file())
+// Every change is saved straight away, so saves can overlap. They share one temp file, so run
+// them one after another or the second rename finds the file already moved.
+let queue: Promise<void> = Promise.resolve()
+
+export function saveGroups(state: GroupsState): Promise<void> {
+  const json = JSON.stringify(clean(state), null, 2)
+  const run = queue.then(async () => {
+    // Write then rename so a crash mid-save can't leave a half-written file.
+    const tmp = file() + '.tmp'
+    await fs.mkdir(app.getPath('userData'), { recursive: true })
+    await fs.writeFile(tmp, json, 'utf8')
+    await fs.rename(tmp, file())
+  })
+  queue = run.catch(() => undefined)
+  return run
 }

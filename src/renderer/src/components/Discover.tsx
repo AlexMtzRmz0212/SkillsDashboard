@@ -7,7 +7,19 @@ import { Icon } from './Icon'
 import { RegistryRow } from './RegistryRow'
 import { Terminal } from './Terminal'
 
-const SUGGESTIONS = ['react', 'frontend design', 'testing', 'pdf', 'seo', 'github']
+// Shown until (or instead of, when offline) the live suggestions from skills.sh arrive.
+const FALLBACK_SUGGESTIONS = ['react', 'frontend design', 'testing', 'pdf', 'seo', 'github']
+const SUGGESTION_COUNT = 6
+
+type Sort = 'relevance' | 'installs'
+
+/** Random picks from the trending board, so refreshing shows something different. */
+function pick(pool: string[]): string[] {
+  const left = [...pool]
+  const out: string[] = []
+  while (out.length < SUGGESTION_COUNT && left.length) out.push(left.splice(Math.floor(Math.random() * left.length), 1)[0])
+  return out
+}
 
 interface Props {
   skills: Skill[]
@@ -25,9 +37,34 @@ export function Discover({ skills, installer, onResult, path, onPath }: Props): 
   const [searched, setSearched] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sort, setSort] = useState<Sort>('relevance')
+  const [suggestions, setSuggestions] = useState(FALLBACK_SUGGESTIONS)
+  const [suggesting, setSuggesting] = useState(false)
+  const pool = useRef<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const seq = useRef(0)
   const searching = query.trim().length >= 2
+
+  /** New suggestions from the trending board; the board is only refetched when none are cached. */
+  const refreshSuggestions = useCallback(async (): Promise<void> => {
+    if (pool.current.length < SUGGESTION_COUNT) {
+      setSuggesting(true)
+      const r = await window.api.browseRegistry([], 'trending', 0)
+      setSuggesting(false)
+      if (r.data?.level !== 'board') return
+      pool.current = [...new Set(r.data.skills.map((s) => s.skillId))]
+    }
+    if (pool.current.length >= SUGGESTION_COUNT) setSuggestions(pick(pool.current))
+  }, [])
+
+  useEffect(() => {
+    void refreshSuggestions()
+  }, [refreshSuggestions])
+
+  const sortedHits = useMemo(
+    () => (sort === 'installs' ? [...hits].sort((a, b) => b.installs - a.installs) : hits),
+    [hits, sort]
+  )
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -129,6 +166,21 @@ export function Discover({ skills, installer, onResult, path, onPath }: Props): 
           {searching && (
             <span className="crumb-meta">{loading ? 'Searching…' : `${hits.length} results for “${searched}”`}</span>
           )}
+          {searching && (
+            <div className="boards sort-tabs" role="tablist" aria-label="Sort results">
+              {(['relevance', 'installs'] as Sort[]).map((s) => (
+                <button
+                  key={s}
+                  role="tab"
+                  aria-selected={sort === s}
+                  className={`board-tab ${sort === s ? 'active' : ''}`}
+                  onClick={() => setSort(s)}
+                >
+                  {s === 'relevance' ? 'Relevance' : 'Installs'}
+                </button>
+              ))}
+            </div>
+          )}
           <label
             className="claude-opt"
             title="Ticked: the skill is installed to ~/.agents/skills and also linked into ~/.claude/skills so Claude Code can use it. Untick to install to ~/.agents/skills only."
@@ -147,7 +199,7 @@ export function Discover({ skills, installer, onResult, path, onPath }: Props): 
         <div className="rows discover-rows">
           {error && <div className="empty">{error}</div>}
           {!error && searched && !loading && hits.length === 0 && <div className="empty">No skills match.</div>}
-          {hits.map((h) => (
+          {sortedHits.map((h) => (
             <RegistryRow
               key={h.id}
               hit={h}
@@ -163,11 +215,22 @@ export function Discover({ skills, installer, onResult, path, onPath }: Props): 
           {path.length === 0 && (
             <div className="suggest suggest-top">
               <span className="suggest-label">Try</span>
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button key={s} className="suggest-btn" onClick={() => setQuery(s)}>
                   {s}
                 </button>
               ))}
+              <button
+                className="icon-btn small"
+                onClick={() => void refreshSuggestions()}
+                disabled={suggesting}
+                title="Show other trending skills"
+                aria-label="Refresh suggestions"
+              >
+                <span className={suggesting ? 'spin' : undefined}>
+                  <Icon name="refresh" size={14} />
+                </span>
+              </button>
             </div>
           )}
           <Browse

@@ -12,6 +12,27 @@ import { useGroups } from './useGroups'
 import { useInstaller } from './useInstaller'
 
 const PACK_HINT = 'Upload it at claude.ai → Settings → Capabilities → Skills → Upload skill, then toggle it on.'
+const DETAIL_HIDDEN_KEY = 'skills-dashboard:detail-hidden'
+
+const LIST_WIDTH_KEY = 'skills-dashboard:list-width'
+
+function readDetailHidden(): boolean {
+  try {
+    return localStorage.getItem(DETAIL_HIDDEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Dragged width of the skill list (the detail panel takes the rest); null = the default. */
+function readListWidth(): number | null {
+  try {
+    const n = Number(localStorage.getItem(LIST_WIDTH_KEY))
+    return Number.isFinite(n) && n >= 200 ? n : null
+  } catch {
+    return null
+  }
+}
 
 export default function App(): React.JSX.Element {
   const [data, setData] = useState<ScanResult | null>(null)
@@ -30,7 +51,32 @@ export default function App(): React.JSX.Element {
   const [sort, setSort] = useState<SortKey>('name')
   const [installs, setInstalls] = useState<InstallsState>({ fetchedAt: null, counts: {} })
   const [fetching, setFetching] = useState(false)
+  const [detailHidden, setDetailHidden] = useState(readDetailHidden)
+  const [listWidth, setListWidth] = useState(readListWidth)
   const dirty = useRef(false)
+
+  const showDetail = useCallback((show: boolean) => {
+    // Hiding the panel throws away an edit in progress, so ask first.
+    if (!show && dirty.current && !confirm('Discard unsaved changes?')) return
+    if (!show) dirty.current = false
+    setDetailHidden(!show)
+    try {
+      localStorage.setItem(DETAIL_HIDDEN_KEY, show ? '0' : '1')
+    } catch {
+      // Not remembered across restarts, but the toggle still works.
+    }
+  }, [])
+
+  const resizeList = useCallback((px: number | null, save: boolean) => {
+    setListWidth(px)
+    if (!save) return
+    try {
+      if (px === null) localStorage.removeItem(LIST_WIDTH_KEY)
+      else localStorage.setItem(LIST_WIDTH_KEY, String(Math.round(px)))
+    } catch {
+      // Not remembered across restarts.
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +128,15 @@ export default function App(): React.JSX.Element {
     setSelectedId(id)
   }, [])
 
+  /** Clicking a skill in the list brings the panel back if it was hidden. */
+  const open = useCallback(
+    (id: string) => {
+      select(id)
+      showDetail(true)
+    },
+    [select, showDetail]
+  )
+
   const onDirty = useCallback((d: boolean) => {
     dirty.current = d
   }, [])
@@ -118,7 +173,10 @@ export default function App(): React.JSX.Element {
   const selected = data?.skills.find((s) => s.id === selectedId) ?? null
 
   return (
-    <div className="app">
+    <div
+      className={`app ${view === 'library' && detailHidden ? 'detail-hidden' : ''}`}
+      style={listWidth !== null ? ({ '--list-w': `${listWidth}px` } as React.CSSProperties) : undefined}
+    >
       <Sidebar
         skills={data?.skills ?? []}
         view={view}
@@ -170,8 +228,12 @@ export default function App(): React.JSX.Element {
             onSort={setSort}
             onQuery={setQuery}
             onSelect={select}
+            onOpen={open}
+            detailHidden={detailHidden}
+            onToggleDetail={() => showDetail(detailHidden)}
+            onResize={resizeList}
           />
-          {error ? (
+          {detailHidden ? null : error ? (
             <section className="detail empty-detail">
               <p>Couldn't scan skills: {error}</p>
             </section>
@@ -187,6 +249,7 @@ export default function App(): React.JSX.Element {
               version={version}
               onDirty={onDirty}
               onResult={onResult}
+              onHide={() => showDetail(false)}
             />
           ) : (
             <section className="detail empty-detail">

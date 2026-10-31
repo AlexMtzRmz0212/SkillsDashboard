@@ -24,6 +24,8 @@ interface Props {
   version: number
   onDirty(dirty: boolean): void
   onResult(r: ActionResult): void
+  /** Collapse the whole detail panel, leaving the list full width. */
+  onHide(): void
 }
 
 const LINK_LABEL: Record<string, string> = {
@@ -33,7 +35,7 @@ const LINK_LABEL: Record<string, string> = {
   real: 'Separate copy in ~/.claude/skills'
 }
 
-export function SkillDetail({ skill, tools, groups, all, installs, onSelect, version, onDirty, onResult }: Props): React.JSX.Element {
+export function SkillDetail({ skill, tools, groups, all, installs, onSelect, version, onDirty, onResult, onHide }: Props): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('preview')
   const [text, setText] = useState<string | null>(null)
   const [busy, setBusy] = useState<'link' | 'pack' | null>(null)
@@ -84,6 +86,9 @@ export function SkillDetail({ skill, tools, groups, all, installs, onSelect, ver
           {SOURCE_LABEL[skill.source]}
           {origin && <span className="eyebrow-sub">· {origin}</span>}
           <span className="eyebrow-sub">· updated {relativeTime(skill.updatedAt)}</span>
+          <button className="icon-btn eyebrow-end" onClick={onHide} title="Hide panel" aria-label="Hide skill panel">
+            <Icon name="panel" size={16} />
+          </button>
         </div>
         <h1>{skill.name}</h1>
         <div className="badges">

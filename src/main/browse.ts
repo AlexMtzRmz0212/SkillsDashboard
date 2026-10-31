@@ -1,4 +1,5 @@
 import type { Board, BrowseData, BrowseResult, RegistryHit, RepoRow, SkillRow } from '@shared/types'
+import { httpFetch } from './http'
 
 // skills.sh has a JSON API only for the leaderboard. Owner, repo and skill pages are
 // server-rendered HTML, so those are read from the markup. That markup isn't a contract:
@@ -8,7 +9,7 @@ const SEGMENT = /^[\w.-]+$/
 const BOARDS: Board[] = ['all-time', 'trending', 'hot']
 
 async function get(url: string, accept: string): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await httpFetch(url, {
     headers: { 'user-agent': 'Mozilla/5.0 (SkillsDashboard)', accept },
     signal: AbortSignal.timeout(15000)
   })

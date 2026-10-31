@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { ALL_SKILLS, installCommand, type InstallEvent, type InstallStart, type RegistryHit, type SearchResult } from '@shared/types'
+import { httpFetch } from './http'
 
 // Same undocumented endpoint `npx skills find` uses (see installs.ts).
 const SEARCH = 'https://skills.sh/api/search'
@@ -12,7 +13,7 @@ export async function searchRegistry(query: string): Promise<SearchResult> {
   const q = query.trim()
   if (q.length < 2) return { skills: [] }
   try {
-    const res = await fetch(`${SEARCH}?q=${encodeURIComponent(q)}&limit=40`, {
+    const res = await httpFetch(`${SEARCH}?q=${encodeURIComponent(q)}&limit=40`, {
       signal: AbortSignal.timeout(15000)
     })
     const body = (await res.json()) as { skills?: Partial<RegistryHit>[]; error?: string }

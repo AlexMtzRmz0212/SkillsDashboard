@@ -17,7 +17,16 @@ interface Props {
   onSort(s: SortKey): void
   onQuery(q: string): void
   onSelect(id: string): void
+  /** A click on a row (not the arrow keys): selects it and shows the detail panel again. */
+  onOpen(id: string): void
+  detailHidden: boolean
+  onToggleDetail(): void
+  /** Dragged list width in px (null = back to the default); `save` is true when the drag ends. */
+  onResize(px: number | null, save: boolean): void
 }
+
+const MIN_LIST = 260
+const MIN_DETAIL = 380
 
 export function SkillList({
   skills,
@@ -28,9 +37,32 @@ export function SkillList({
   sort,
   onSort,
   onQuery,
-  onSelect
+  onSelect,
+  onOpen,
+  detailHidden,
+  onToggleDetail,
+  onResize
 }: Props): React.JSX.Element {
   const searchRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLElement>(null)
+
+  const drag = (e: React.PointerEvent<HTMLDivElement>): void => {
+    const left = listRef.current?.getBoundingClientRect().left ?? 0
+    const handle = e.currentTarget
+    handle.setPointerCapture(e.pointerId)
+    const width = (ev: PointerEvent): number =>
+      Math.max(MIN_LIST, Math.min(ev.clientX - left, window.innerWidth - left - MIN_DETAIL))
+    const move = (ev: PointerEvent): void => onResize(width(ev), false)
+    const up = (ev: PointerEvent): void => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', up)
+      handle.removeEventListener('pointercancel', up)
+      onResize(width(ev), true)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', up)
+    handle.addEventListener('pointercancel', up)
+  }
 
   // Ctrl+K / Ctrl+F focus search; arrow keys move the selection.
   useEffect(() => {
@@ -59,7 +91,18 @@ export function SkillList({
   }, [selectedId])
 
   return (
-    <section className="list">
+    <section className="list" ref={listRef}>
+      {!detailHidden && (
+        <div
+          className="resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize skill panel"
+          title="Drag to resize, double-click to reset"
+          onPointerDown={drag}
+          onDoubleClick={() => onResize(null, true)}
+        />
+      )}
       <div className="search">
         <Icon name="search" />
         <input
@@ -82,13 +125,24 @@ export function SkillList({
         <span>
           {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
         </span>
-        <label className="sort">
-          Sort
-          <select value={sort} onChange={(e) => onSort(e.target.value as SortKey)} aria-label="Sort skills">
-            <option value="name">Name</option>
-            <option value="installs">Installs</option>
-          </select>
-        </label>
+        <div className="list-meta-end">
+          <label className="sort">
+            Sort
+            <select value={sort} onChange={(e) => onSort(e.target.value as SortKey)} aria-label="Sort skills">
+              <option value="name">Name</option>
+              <option value="installs">Installs</option>
+            </select>
+          </label>
+          <button
+            className="icon-btn small"
+            onClick={onToggleDetail}
+            title={detailHidden ? 'Show panel' : 'Hide panel'}
+            aria-label={detailHidden ? 'Show skill panel' : 'Hide skill panel'}
+            aria-pressed={!detailHidden}
+          >
+            <Icon name="panel" size={15} />
+          </button>
+        </div>
       </div>
       <div className="rows" role="listbox" aria-label="Skills">
         {skills.map((s) => (
@@ -97,7 +151,7 @@ export function SkillList({
             role="option"
             aria-selected={s.id === selectedId}
             className={`row ${s.id === selectedId ? 'selected' : ''}`}
-            onClick={() => onSelect(s.id)}
+            onClick={() => onOpen(s.id)}
           >
             <div className="row-top">
               <span className={`dot dot-${s.source}`} title={SOURCE_LABEL[s.source]} />

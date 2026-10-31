@@ -46,7 +46,17 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+// A second copy would share the data folder (groups, caches) with the first and fight over it.
+const primary = app.requestSingleInstanceLock()
+if (!primary) app.quit()
+else
+  app.on('second-instance', () => {
+    if (win?.isMinimized()) win.restore()
+    win?.focus()
+  })
+
 app.whenReady().then(() => {
+  if (!primary) return
   ipcMain.handle('skills:scan', () => scan())
   ipcMain.handle('groups:get', () => getGroups())
   ipcMain.handle('groups:save', (_e, state: GroupsState) => saveGroups(state))

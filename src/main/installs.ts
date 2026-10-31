@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import { registryKey, type InstallsState, type RegistryRef } from '@shared/types'
+import { httpFetch } from './http'
 import { currentSkills } from './scanner'
 
 // The endpoint the `skills` CLI uses for `npx skills find`. It's undocumented, so
@@ -26,7 +27,7 @@ interface SearchHit {
 }
 
 async function search(q: string): Promise<SearchHit[]> {
-  const res = await fetch(`${SEARCH}?q=${encodeURIComponent(q)}&limit=100`, {
+  const res = await httpFetch(`${SEARCH}?q=${encodeURIComponent(q)}&limit=100`, {
     signal: AbortSignal.timeout(15000)
   })
   if (!res.ok) throw new Error(`skills.sh answered ${res.status}`)
