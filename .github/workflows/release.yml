@@ -22,6 +22,11 @@ jobs:
       # Auto-update needs a strictly increasing version; derive it from the run number.
       - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
       - run: npm run build
+      # GitHub rejects a release whose tag doesn't exist yet, so create the tag first.
+      - name: Tag this commit
+        run: |
+          git tag "v0.1.${{ github.run_number }}"
+          git push origin "v0.1.${{ github.run_number }}"
       - run: npx electron-builder --win nsis --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
