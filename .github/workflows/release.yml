@@ -27,6 +27,14 @@ jobs:
         run: |
           git tag "v0.1.${{ github.run_number }}"
           git push origin "v0.1.${{ github.run_number }}"
-      - run: npx electron-builder --win nsis --publish always
+      # Build only. electron-builder's own publisher races itself and splits one release in two.
+      - run: npx electron-builder --win nsis --publish never
+      - name: Publish release
+        run: >
+          gh release create "v0.1.${{ github.run_number }}"
+          "dist/Skills-Dashboard-Setup-0.1.${{ github.run_number }}.exe"
+          "dist/Skills-Dashboard-Setup-0.1.${{ github.run_number }}.exe.blockmap"
+          "dist/latest.yml"
+          --title "v0.1.${{ github.run_number }}" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
