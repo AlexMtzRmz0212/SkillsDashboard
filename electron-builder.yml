@@ -16,4 +16,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Skills Dashboard
+publish:
+  provider: github
+  owner: AlexMtzRmz0212
+  repo: SkillsDashboard
+  releaseType: release
 npmRebuild: false

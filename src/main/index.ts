@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'path'
+import { autoUpdater } from 'electron-updater'
 import type { Board, GroupsState } from '@shared/types'
 import * as actions from './actions'
 import { browseRegistry } from './browse'
@@ -46,6 +47,20 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+// Packaged builds poll GitHub Releases, download new versions in the background and install
+// them when the app is next closed. Dev runs (npm run dev) never update.
+function startAutoUpdate(): void {
+  if (!app.isPackaged) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('error', (err) => console.error('[updater]', err.message))
+  const check = (): void => {
+    autoUpdater.checkForUpdates().catch((err: Error) => console.error('[updater]', err.message))
+  }
+  check()
+  setInterval(check, 4 * 60 * 60 * 1000)
+}
+
 // A second copy would share the data folder (groups, caches) with the first and fight over it.
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
@@ -83,6 +98,7 @@ app.whenReady().then(() => {
   ipcMain.handle('install:cancel', () => cancelInstall())
 
   createWindow()
+  startAutoUpdate()
   const watcher = watchRoots(() => win?.webContents.send('skills:changed'))
   app.on('before-quit', () => {
     watcher.close()

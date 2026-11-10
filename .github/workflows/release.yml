@@ -1,0 +1,27 @@
+name: Release
+
+# Every push to main builds the Windows installer and publishes it as a GitHub Release.
+# Installed copies of the app pick it up automatically.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Auto-update needs a strictly increasing version; derive it from the run number.
+      - run: npm version "0.1.${{ github.run_number }}" --no-git-tag-version
+      - run: npm run build
+      - run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
